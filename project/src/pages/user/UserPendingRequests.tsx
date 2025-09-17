@@ -4,13 +4,15 @@ import { apiService } from '../../services/api';
 import { BookingRequest } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
-import { Calendar, Users, User as UserIcon, X } from 'lucide-react';
+import { TeamMembersModal } from '../../components/TeamMembersModal';
+import { Calendar, Users, User as UserIcon, X, MapPin, Building, Home, Bed } from 'lucide-react';
 
 export function UserPendingRequests() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<BookingRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set());
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<any[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [cancellingRequest, setCancellingRequest] = useState<number | null>(null);
 
   useEffect(() => {
@@ -63,14 +65,24 @@ export function UserPendingRequests() {
     }
   };
 
-  const toggleExpanded = (requestId: number) => {
-    const newExpanded = new Set(expandedRequests);
-    if (newExpanded.has(requestId)) {
-      newExpanded.delete(requestId);
-    } else {
-      newExpanded.add(requestId);
+  const showTeamMembers = (members: any[]) => {
+    setSelectedTeamMembers(members);
+    setShowTeamModal(true);
+  };
+
+  const renderAccommodationIcons = (accommodation: any) => {
+    if (!accommodation || (!accommodation.apartment && !accommodation.flat && !accommodation.room && !accommodation.bed)) {
+      return null;
     }
-    setExpandedRequests(newExpanded);
+
+    return (
+      <div className="flex items-center space-x-1">
+        {accommodation.apartment && <Building size={14} className="text-blue-600" />}
+        {accommodation.flat && <Home size={14} className="text-green-600" />}
+        {accommodation.room && <div className="w-3 h-3 bg-orange-600 rounded-sm" />}
+        {accommodation.bed && <Bed size={14} className="text-purple-600" />}
+      </div>
+    );
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -101,7 +113,6 @@ export function UserPendingRequests() {
         ) : (
           <div className="space-y-4">
             {requests.map((request) => {
-              const isExpanded = expandedRequests.has(request.requestId);
               const isRequester = request.requestedUser.id === user?.id;
               const userInRequest = request.bookingMembers.find(member => member.userId === user?.id);
               
@@ -139,9 +150,17 @@ export function UserPendingRequests() {
                       {userInRequest && (
                         <div className="bg-gray-50 p-3 rounded-md mb-3">
                           <div className="text-sm">
-                            <span className="font-medium text-gray-700">Your booking:</span>
-                            <div className="mt-1 text-gray-900">
-                              {formatDateTime(userInRequest.checkIn || '').date} at {formatDateTime(userInRequest.checkIn || '').time} - {formatDateTime(userInRequest.checkOut || '').date} at {formatDateTime(userInRequest.checkOut || '').time}
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <span className="font-medium text-gray-700">Your booking:</span>
+                                <div className="mt-1 text-gray-900">
+                                  {formatDateTime(userInRequest.checkIn || '').date} at {formatDateTime(userInRequest.checkIn || '').time} - {formatDateTime(userInRequest.checkOut || '').date} at {formatDateTime(userInRequest.checkOut || '').time}
+                                </div>
+                              </div>
+                              <div className="flex items-center space-x-2">
+                                {renderAccommodationIcons(userInRequest.accommodation)}
+                                {/* Map link would go here if available in API */}
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -149,30 +168,12 @@ export function UserPendingRequests() {
 
                       {request.bookingType === 'team' && (
                         <button
-                          onClick={() => toggleExpanded(request.requestId)}
+                          onClick={() => showTeamMembers(request.bookingMembers)}
                           className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
                         >
                           <Users size={14} />
-                          <span>{isExpanded ? 'Hide' : 'View'} Team Members</span>
+                          <span>View Team Members</span>
                         </button>
-                      )}
-
-                      {isExpanded && request.bookingType === 'team' && (
-                        <div className="mt-4 space-y-2">
-                          {request.bookingMembers.map((member, index) => (
-                            <div key={index} className="bg-gray-50 p-3 rounded-md">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">{member.username}</div>
-                                  <div className="text-xs text-gray-500">{member.role}</div>
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {formatDateTime(member.checkIn || '').date} - {formatDateTime(member.checkOut || '').date}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
                       )}
                     </div>
 
@@ -223,6 +224,12 @@ export function UserPendingRequests() {
           </div>
         )}
       </div>
+
+      <TeamMembersModal
+        isOpen={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        members={selectedTeamMembers}
+      />
     </div>
   );
 }
