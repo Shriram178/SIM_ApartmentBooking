@@ -438,13 +438,13 @@ export function ResourceManagement() {
               <Layers size={14} />
               <span>Bulk Add</span>
             </button>
-            <button
+            {/* <button
               onClick={() => alert('Exporting resources to Excel...')}
               className="flex items-center space-x-2 px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700"
             >
               <Download size={14} />
               <span>Export</span>
-            </button>
+            </button> */}
           </div>
         </div>
 
@@ -667,7 +667,7 @@ export function ResourceManagement() {
                           {room.bedCount || 0} beds
                         </div>
                       </div>
-                      <div className="flex space-x-1">
+                      {/* <div className="flex space-x-1">
                         <button
                           onClick={() => openModal('room', 'edit', room)}
                           className="p-1 text-gray-400 hover:text-blue-600"
@@ -680,7 +680,7 @@ export function ResourceManagement() {
                         >
                           <Trash2 size={12} />
                         </button>
-                      </div>
+                      </div> */}
                     </div>
                     
                     {room.bedCount && room.bedCount > 0 && (

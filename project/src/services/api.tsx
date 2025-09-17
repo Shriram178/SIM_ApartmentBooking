@@ -337,6 +337,81 @@ async getFlatDetails(flatId: number): Promise<ApiResponse> {
     });
   }
 
+  // Export booking history to Excel
+async exportBookingHistory(filters: {
+  city?: string;
+  status?: string;
+  role?: string;
+  search?: string;
+  checkIn?: string;
+  checkOut?: string;
+}): Promise<Blob> {
+  const queryParams = new URLSearchParams();
+  
+  // Add filters as query parameters
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && value.trim() !== '') {
+      queryParams.append(key, value);
+    }
+  });
+
+  const response = await fetch(`${this.baseUrl}/api/bookings/history/export?${queryParams.toString()}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${this.token}`, // Adjust based on your auth implementation
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Export failed: ${response.statusText}`);
+  }
+
+  return response.blob();
+}
+
+
+// Export occupancy data to Excel
+async exportOccupancyData(filters: {
+  city?: string;
+  apartment?: string;
+  status?: string;
+}, dateRange?: {
+  checkIn: string;
+  checkOut: string;
+}): Promise<Blob> {
+  const queryParams = new URLSearchParams();
+  
+  // Add filters as query parameters
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value && value.trim() !== '') {
+      queryParams.append(key, value);
+    }
+  });
+
+  const requestBody = dateRange ? {
+    checkIn: dateRange.checkIn,
+    checkOut: dateRange.checkOut
+  } : undefined;
+
+  const response = await fetch(`${this.baseUrl}/api/occupancy/export?${queryParams.toString()}`, {
+    method: 'POST', // Changed to POST since we're sending a body
+    headers: {
+      'Authorization': `Bearer ${this.token}`,
+      'Content-Type': 'application/json',
+    },
+    ...(requestBody && { body: JSON.stringify(requestBody) }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Export failed: ${response.statusText}`);
+  }
+
+  return response.blob();
+}
+
+
+
 
 }
 

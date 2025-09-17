@@ -3,13 +3,16 @@ import { apiService } from '../../services/api';
 import { City } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
-import { Download, Filter, X, Calendar } from 'lucide-react';
+import { TeamMembersModal } from '../../components/TeamMembersModal';
+import { Download, Filter, X, Calendar, Users } from 'lucide-react';
 
 export function AdminBookingHistory() {
   const [history, setHistory] = useState<any[]>([]);
   const [cities, setCities] = useState<City[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<any[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
     city: '',
@@ -73,10 +76,47 @@ export function AdminBookingHistory() {
     setShowFilters(false);
   };
 
-  const exportToExcel = () => {
-    // This would trigger the export functionality
-    alert('Exporting to Excel...');
+  const showTeamMembers = (members: any[]) => {
+    setSelectedTeamMembers(members);
+    setShowTeamModal(true);
   };
+
+  const exportToExcel = async () => {
+  try {
+    setIsLoading(true); // Optional: show loading state
+    
+    // Use the same filters that are currently applied
+    const queryFilters = Object.entries(filters)
+      .filter(([_, value]) => value.trim() !== '')
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+
+    const blob = await apiService.exportBookingHistory(queryFilters);
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Generate filename with current date
+    const currentDate = new Date().toISOString().split('T')[0];
+    link.download = `booking-history-${currentDate}.xlsx`;
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+  } catch (error) {
+    console.error('Failed to export booking history:', error);
+    alert('Failed to export booking history. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return { date: 'N/A', time: 'N/A' };
@@ -140,12 +180,14 @@ export function AdminBookingHistory() {
               <span>Filters</span>
             </button>
             <button
-              onClick={exportToExcel}
-              className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              <Download size={14} />
-              <span>Export to Excel</span>
-            </button>
+  onClick={exportToExcel}
+  disabled={isLoading}
+  className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <Download size={14} />
+  <span>{isLoading ? 'Exporting...' : 'Export to Excel'}</span>
+</button>
+
           </div>
         </div>
 
@@ -291,9 +333,13 @@ export function AdminBookingHistory() {
                     <td className="px-4 py-3 text-sm">
                       <span className="capitalize">{request.bookingType}</span>
                       {request.bookingType === 'team' && (
-                        <div className="text-xs text-gray-500">
-                          {request.bookingMembers.length} members
-                        </div>
+                        <button
+                          onClick={() => showTeamMembers(request.bookingMembers)}
+                          className="text-xs text-blue-600 hover:text-blue-700 flex items-center space-x-1 mt-1"
+                        >
+                          <Users size={12} />
+                          <span>{request.bookingMembers.length} members</span>
+                        </button>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900">
@@ -306,6 +352,12 @@ export function AdminBookingHistory() {
           </div>
         )}
       </div>
+
+      <TeamMembersModal
+        isOpen={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        members={selectedTeamMembers}
+      />
     </div>
   );
 }

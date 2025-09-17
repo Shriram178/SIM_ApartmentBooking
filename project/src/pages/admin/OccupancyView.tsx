@@ -3,22 +3,37 @@ import { apiService } from '../../services/api';
 import { City } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
-import { Download, Calendar } from 'lucide-react';
+import { TeamMembersModal } from '../../components/TeamMembersModal';
+import { Download, Calendar, Users } from 'lucide-react';
 
 export function OccupancyView() {
   const [occupancyData, setOccupancyData] = useState<any>(null);
   const [cities, setCities] = useState<City[]>([]);
+  const [apartments, setApartments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [isLoadingApartments, setIsLoadingApartments] = useState(false);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<any[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [filters, setFilters] = useState({
     city: '',
     apartment: '',
     status: '',
   });
-  const [dateRange, setDateRange] = useState({
-    checkIn: '',
-    checkOut: '',
-  });
+  
+  // Set default date range to today + 5 days
+  const getDefaultDateRange = () => {
+    const now = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(now.getDate() + 5);
+    
+    return {
+      checkIn: now.toISOString().split('T')[0],
+      checkOut: futureDate.toISOString().split('T')[0],
+    };
+  };
+  
+  const [dateRange, setDateRange] = useState(getDefaultDateRange());
 
   useEffect(() => {
     loadOccupancyData();
@@ -34,6 +49,24 @@ export function OccupancyView() {
       console.error('Failed to load cities:', error);
     } finally {
       setIsLoadingCities(false);
+    }
+  };
+
+  const loadApartmentsByCity = async (cityId: string) => {
+    if (!cityId) {
+      setApartments([]);
+      return;
+    }
+
+    try {
+      setIsLoadingApartments(true);
+      const response = await apiService.getApartmentsByCity(parseInt(cityId));
+      setApartments(response.data?.apartments || []);
+    } catch (error) {
+      console.error('Failed to load apartments:', error);
+      setApartments([]);
+    } finally {
+      setIsLoadingApartments(false);
     }
   };
 
@@ -60,6 +93,13 @@ export function OccupancyView() {
 
   const handleFilterChange = (key: string, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+    
+    // Load apartments when city changes
+    if (key === 'city') {
+      loadApartmentsByCity(value);
+      // Reset apartment selection when city changes
+      setFilters(prev => ({ ...prev, apartment: '' }));
+    }
   };
 
   const handleDateChange = (key: string, value: string) => {
@@ -76,11 +116,57 @@ export function OccupancyView() {
       checkIn: '',
       checkOut: '',
     });
+    setApartments([]);
   };
 
-  const exportToExcel = () => {
-    alert('Exporting occupancy data to Excel...');
+  const showTeamMembers = (members: any[]) => {
+    setSelectedTeamMembers(members);
+    setShowTeamModal(true);
   };
+
+  const exportToExcel = async () => {
+  try {
+    setIsLoading(true); // Show loading state
+    
+    // Prepare query filters (city, apartment, status)
+    const queryFilters = Object.entries(filters)
+      .filter(([_, value]) => value.trim() !== '')
+      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
+
+    // Prepare date range for request body
+    const dateRangeBody = (dateRange.checkIn && dateRange.checkOut) ? {
+      checkIn: `${dateRange.checkIn}T09:00:00Z`,
+      checkOut: `${dateRange.checkOut}T18:00:00Z`
+    } : undefined;
+
+    const blob = await apiService.exportOccupancyData(queryFilters, dateRangeBody);
+    
+    // Create download link
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Generate filename with current date
+    const currentDate = new Date().toISOString().split('T')[0];
+    link.download = `occupancy-data-${currentDate}.xlsx`;
+    
+    // Trigger download
+    document.body.appendChild(link);
+    link.click();
+    
+    // Cleanup
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+  } catch (error) {
+    console.error('Failed to export occupancy data:', error);
+    alert('Failed to export occupancy data. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+
 
   const flattenAccommodations = (hierarchy: any[]) => {
     const flattened: any[] = [];
@@ -180,9 +266,14 @@ export function OccupancyView() {
             value={filters.apartment}
             onChange={(e) => handleFilterChange('apartment', e.target.value)}
             className="p-2 border border-gray-300 rounded text-sm"
+            disabled={isLoadingApartments || !filters.city}
           >
             <option value="">All Apartments</option>
-            <option value="1">Apt1</option>
+            {apartments.map(apartment => (
+              <option key={apartment.id} value={apartment.id}>
+                {apartment.name}
+              </option>
+            ))}
           </select>
 
           <select
@@ -226,12 +317,14 @@ export function OccupancyView() {
           </button>
 
           <button
-            onClick={exportToExcel}
-            className="ml-auto flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-          >
-            <Download size={14} />
-            <span>Export to Excel</span>
-          </button>
+  onClick={exportToExcel}
+  disabled={isLoading}
+  className="ml-auto flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  <Download size={14} />
+  <span>{isLoading ? 'Exporting...' : 'Export to Excel'}</span>
+</button>
+
         </div>
 
         {/* Occupancy Table */}
@@ -268,8 +361,13 @@ export function OccupancyView() {
                     <td className="px-4 py-3 text-sm">
                       {accommodation.occupiedBy ? (
                         <div>
-                          <div className="text-gray-900">{accommodation.occupiedBy.user.name}</div>
-                          <div className="text-xs text-gray-500">{accommodation.occupiedBy.user.role}</div>
+                          <button
+                            onClick={() => showTeamMembers([accommodation.occupiedBy.user])}
+                            className="text-left hover:text-blue-600"
+                          >
+                            <div className="text-gray-900">{accommodation.occupiedBy.user.name}</div>
+                            <div className="text-xs text-gray-500">{accommodation.occupiedBy.user.role}</div>
+                          </button>
                         </div>
                       ) : (
                         <span className="text-gray-500">-</span>
@@ -300,6 +398,12 @@ export function OccupancyView() {
           </div>
         )}
       </div>
+
+      <TeamMembersModal
+        isOpen={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        members={selectedTeamMembers}
+      />
     </div>
   );
 
