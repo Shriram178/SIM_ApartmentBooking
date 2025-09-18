@@ -499,7 +499,7 @@ export const getBookingHistory = async (req, res) => {
     await client.query(
       `UPDATE booking_members 
        SET status = 'accommodated'
-       WHERE status IN ('approved', 'pending')
+       WHERE status IN ('approved')
        AND check_in <= $1 AND check_out > $1`,
       [now]
     );
@@ -508,7 +508,7 @@ export const getBookingHistory = async (req, res) => {
     await client.query(
       `UPDATE booking_members 
        SET status = 'completed'
-       WHERE status IN ('approved', 'pending', 'accommodated')
+       WHERE status IN ('approved', 'accommodated')
        AND check_out <= $1`,
       [now]
     );
