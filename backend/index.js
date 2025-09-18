@@ -223,7 +223,7 @@ app.use('/api/availability', authenticateToken,authorizeAccess('user','admin'), 
 app.use('/api/bookings', authenticateToken,authorizeAccess('user','admin'), bookingRoutes);
 app.use('/api/requests', authenticateToken,authorizeAccess('user','admin'), requestRoutes);
 app.use('/api/accommodation', authenticateToken,authorizeAccess('user','admin'), accommodationsRoute);
-app.use('/api/beds',bedRoutes);
+app.use('/api/beds', authenticateToken,authorizeAccess('user','admin'),bedRoutes);
 
 app.listen(PORT, () => {
   console.log(`✅ Server running on http://localhost: ${PORT} `);
