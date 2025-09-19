@@ -140,12 +140,13 @@ export const getRoomsByFlat = async (req, res) => {
 
     const flat = flatCheck.rows[0];
 
-    // Get all rooms in the flat
+    // Get all rooms with their beds
     const roomsRes = await client.query(`
       SELECT 
-        r.id,
-        r.name,
-        COUNT(b.id) AS bed_count,
+        r.id AS room_id,
+        r.name AS room_name,
+        b.id AS bed_id,
+        b.name AS bed_name,
         EXISTS (
           SELECT 1 FROM assigned_accommodations aa
           JOIN booking_members bm ON bm.id = aa.booking_members_id
@@ -155,9 +156,31 @@ export const getRoomsByFlat = async (req, res) => {
       FROM rooms r
       LEFT JOIN beds b ON b.room_id = r.id
       WHERE r.flat_id = $1
-      GROUP BY r.id
-      ORDER BY r.name
+      ORDER BY r.name, b.name
     `, [flatId]);
+
+    // Group rooms and beds
+    const roomsMap = {};
+    roomsRes.rows.forEach(row => {
+      if (!roomsMap[row.room_id]) {
+        roomsMap[row.room_id] = {
+          id: row.room_id,
+          name: row.room_name,
+          statistics: {
+            beds: 0
+          },
+          beds: []
+        };
+      }
+
+      if (row.bed_id) {
+        roomsMap[row.room_id].beds.push({
+          id: row.bed_id,
+          name: row.bed_name
+        });
+        roomsMap[row.room_id].statistics.beds++;
+      }
+    });
 
     const response = {
       success: true,
@@ -174,13 +197,7 @@ export const getRoomsByFlat = async (req, res) => {
             }
           }
         },
-        rooms: roomsRes.rows.map(room => ({
-          id: room.id,
-          name: room.name,
-          statistics: {
-            beds: parseInt(room.bed_count)
-          }
-        }))
+        rooms: Object.values(roomsMap)
       }
     };
 
@@ -197,6 +214,7 @@ export const getRoomsByFlat = async (req, res) => {
     client.release();
   }
 };
+
 
 export const createRoom=  async (req, res) => {
   const { name, flat_id, beds } = req.body;

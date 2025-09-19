@@ -316,7 +316,8 @@ export function AdminPendingRequests() {
 
     try {
       setIsProcessing(true);
-      await apiService.rejectRequest(processingRequest.requestId, remarks);
+   const res=await apiService.rejectRequest(processingRequest.requestId, remarks);
+   console.log(res);
       setProcessingRequest(null);
       setRemarks('');
       await loadPendingRequests();
