@@ -211,7 +211,7 @@ const swaggerDocs = swaggerJsDoc(swaggerOptions);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
-// Apply authentication middleware to all API routes
+
 app.use('/auth', authRoutes);
 app.use('/api/cities', authenticateToken,authorizeAccess('user','admin'), cityRoutes);
 app.use('/api/users', authenticateToken,authorizeAccess('user','admin'), userRoutes); 
