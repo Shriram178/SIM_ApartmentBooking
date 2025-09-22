@@ -94,12 +94,12 @@ export function AdminPendingRequests() {
     {
       key: 'individual',
       label: 'Individual',
-      notificationCount: individualRequests.length
+      notificationCount: individualRequests.length > 0 ? individualRequests.length : undefined
     },
     {
       key: 'team',
       label: 'Team',
-      notificationCount: teamRequests.length
+      notificationCount: teamRequests.length > 0 ? teamRequests.length : undefined
     }
   ];
 

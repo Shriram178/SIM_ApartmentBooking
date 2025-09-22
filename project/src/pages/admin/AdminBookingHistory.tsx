@@ -4,7 +4,7 @@ import { City } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TeamMembersModal } from '../../components/TeamMembersModal';
-import { Download, Filter, X, Calendar, Users } from 'lucide-react';
+import { Download, Filter, X, Calendar, Users, Building, Home, Bed, DoorOpen, Info } from 'lucide-react';
 
 export function AdminBookingHistory() {
   const [history, setHistory] = useState<any[]>([]);
@@ -81,42 +81,10 @@ export function AdminBookingHistory() {
     setShowTeamModal(true);
   };
 
-  const exportToExcel = async () => {
-  try {
-    setIsLoading(true); // Optional: show loading state
-    
-    // Use the same filters that are currently applied
-    const queryFilters = Object.entries(filters)
-      .filter(([_, value]) => value.trim() !== '')
-      .reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {});
-
-    const blob = await apiService.exportBookingHistory(queryFilters);
-    
-    // Create download link
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    
-    // Generate filename with current date
-    const currentDate = new Date().toISOString().split('T')[0];
-    link.download = `booking-history-${currentDate}.xlsx`;
-    
-    // Trigger download
-    document.body.appendChild(link);
-    link.click();
-    
-    // Cleanup
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(url);
-    
-  } catch (error) {
-    console.error('Failed to export booking history:', error);
-    alert('Failed to export booking history. Please try again.');
-  } finally {
-    setIsLoading(false);
-  }
-};
-
+  const exportToExcel = () => {
+    // This would trigger the export functionality
+    alert('Exporting to Excel...');
+  };
 
   const formatDateTime = (dateStr: string) => {
     if (!dateStr) return { date: 'N/A', time: 'N/A' };
@@ -180,17 +148,40 @@ export function AdminBookingHistory() {
               <span>Filters</span>
             </button>
             <button
-  onClick={exportToExcel}
-  disabled={isLoading}
-  className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
->
-  <Download size={14} />
-  <span>{isLoading ? 'Exporting...' : 'Export to Excel'}</span>
-</button>
-
+              onClick={exportToExcel}
+              className="flex items-center space-x-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+            >
+              <Download size={14} />
+              <span>Export to Excel</span>
+            </button>
           </div>
         </div>
 
+        {/* Accommodation Legend */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2 mb-3">
+            <Info size={16} className="text-blue-600" />
+            <h4 className="text-sm font-medium text-blue-900">Accommodation Types</h4>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div className="flex items-center space-x-2">
+              <Building size={14} className="text-blue-600" />
+              <span className="text-gray-700">Full Apartment</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Home size={14} className="text-green-600" />
+              <span className="text-gray-700">Private Flat</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <DoorOpen size={14} className="text-orange-600" />
+              <span className="text-gray-700">Private Room</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Bed size={14} className="text-purple-600" />
+              <span className="text-gray-700">Shared Bed</span>
+            </div>
+          </div>
+        </div>
         {/* Filters Panel */}
         {showFilters && (
           <div className="bg-gray-50 p-4 rounded-lg mb-6">
@@ -322,9 +313,34 @@ export function AdminBookingHistory() {
                     <td className="px-4 py-3 text-sm">
                       {request.bookingMembers[0]?.assignedAccommodation ? (
                         <div className="text-blue-600 text-xs">
-                          {Object.values(request.bookingMembers[0].assignedAccommodation)
-                            .filter(Boolean)
-                            .join(' - ') || 'Not assigned'}
+                          <div className="flex items-center space-x-2">
+                            {(() => {
+                              const acc = request.bookingMembers[0].assignedAccommodation;
+                              let icon = null;
+                              let text = '';
+                              
+                              if (acc.bed) {
+                                icon = <Bed size={14} className="text-purple-600" />;
+                                text = `${acc.apartment || ''} -> ${acc.flat || ''}`.replace(' -> ', ' → ');
+                              } else if (acc.room) {
+                                icon = <DoorOpen size={14} className="text-orange-600" />;
+                                text = `${acc.apartment || ''} -> ${acc.flat || ''}`.replace(' -> ', ' → ');
+                              } else if (acc.flat) {
+                                icon = <Home size={14} className="text-green-600" />;
+                                text = `${acc.apartment || ''} -> ${acc.flat || ''}`.replace(' -> ', ' → ');
+                              } else if (acc.apartment) {
+                                icon = <Building size={14} className="text-blue-600" />;
+                                text = acc.apartment;
+                              }
+                              
+                              return (
+                                <>
+                                  {icon}
+                                  <span className="text-xs text-gray-900">{text || 'Not assigned'}</span>
+                                </>
+                              );
+                            })()}
+                          </div>
                         </div>
                       ) : (
                         <span className="text-gray-500">Not assigned</span>

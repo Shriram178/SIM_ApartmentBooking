@@ -5,7 +5,7 @@ import { BookingRequest, City } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TeamMembersModal } from '../../components/TeamMembersModal';
-import { Building, Home, Bed, Users, Calendar, Filter, X, MapPin } from 'lucide-react';
+import { Building, Home, Bed, Users, Calendar, Filter, X, MapPin, DoorOpen } from 'lucide-react';
 
 export function UserBookingHistory() {
   const { user } = useAuth();
@@ -110,23 +110,50 @@ export function UserBookingHistory() {
 
   const renderAccommodation = (accommodation: any) => {
     if (!accommodation || (!accommodation.apartment && !accommodation.flat && !accommodation.room && !accommodation.bed)) {
-      return null;
+      return (
+        <div className="text-gray-500 text-sm">
+          Not assigned
+        </div>
+      );
     }
 
+    // Build the accommodation path without category descriptors
+    const parts = [];
+    let icon = null;
+
+    // Always include apartment name if available
+    if (accommodation.apartment?.name) {
+      parts.push(accommodation.apartment.name);
+    }
+
+    // Determine the most specific allocation type and build path accordingly
+    if (accommodation.bed?.name) {
+      // Bed allocation - show apartment -> flat
+      if (accommodation.flat?.name) {
+        parts.push(accommodation.flat.name);
+      }
+      icon = <Bed size={14} className="text-purple-600" />;
+    } else if (accommodation.room?.name) {
+      // Room allocation - show apartment -> flat
+      if (accommodation.flat?.name) {
+        parts.push(accommodation.flat.name);
+      }
+      icon = <DoorOpen size={14} className="text-orange-600" />;
+    } else if (accommodation.flat?.name) {
+      // Flat allocation - show apartment -> flat
+      parts.push(accommodation.flat.name);
+      icon = <Home size={14} className="text-green-600" />;
+    } else {
+      // Apartment allocation - show just apartment
+      icon = <Building size={14} className="text-blue-600" />;
+    }
+
+    const accommodationText = parts.join(' -> ');
+
     return (
-      <div className="flex items-center space-x-1">
-        {accommodation.apartment && (
-          <Building size={12} className="text-blue-600" />
-        )}
-        {accommodation.flat && (
-          <Home size={12} className="text-green-600" />
-        )}
-        {accommodation.room && (
-          <div className="w-3 h-3 bg-orange-600 rounded-sm" />
-        )}
-        {accommodation.bed && (
-          <Bed size={12} className="text-purple-600" />
-        )}
+      <div className="flex items-center space-x-2">
+        {icon}
+        <span className="text-sm text-gray-900">{accommodationText}</span>
       </div>
     );
   };

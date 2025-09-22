@@ -5,7 +5,7 @@ import { BookingRequest } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
 import { TeamMembersModal } from '../../components/TeamMembersModal';
-import { Calendar, Users, User as UserIcon, X, MapPin, Building, Home, Bed } from 'lucide-react';
+import { Calendar, Users, User as UserIcon, X, MapPin, Building, Home, Bed, DoorOpen } from 'lucide-react';
 
 export function UserPendingRequests() {
   const { user } = useAuth();
@@ -79,7 +79,7 @@ export function UserPendingRequests() {
       <div className="flex items-center space-x-1">
         {accommodation.apartment && <Building size={14} className="text-blue-600" />}
         {accommodation.flat && <Home size={14} className="text-green-600" />}
-        {accommodation.room && <div className="w-3 h-3 bg-orange-600 rounded-sm" />}
+        {accommodation.room && <DoorOpen size={14} className="text-orange-600" />}
         {accommodation.bed && <Bed size={14} className="text-purple-600" />}
       </div>
     );
