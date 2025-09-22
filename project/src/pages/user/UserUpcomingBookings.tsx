@@ -4,13 +4,15 @@ import { apiService } from '../../services/api';
 import { BookingRequest } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
-import { Building, Home, Bed, Users } from 'lucide-react';
+import { TeamMembersModal } from '../../components/TeamMembersModal';
+import { Building, Home, Bed, Users, MapPin } from 'lucide-react';
 
 export function UserUpcomingBookings() {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<BookingRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [expandedBookings, setExpandedBookings] = useState<Set<number>>(new Set());
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<any[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -42,14 +44,9 @@ export function UserUpcomingBookings() {
     }
   };
 
-  const toggleExpanded = (requestId: number) => {
-    const newExpanded = new Set(expandedBookings);
-    if (newExpanded.has(requestId)) {
-      newExpanded.delete(requestId);
-    } else {
-      newExpanded.add(requestId);
-    }
-    setExpandedBookings(newExpanded);
+  const showTeamMembers = (members: any[]) => {
+    setSelectedTeamMembers(members);
+    setShowTeamModal(true);
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -62,34 +59,22 @@ export function UserUpcomingBookings() {
 
   const renderAccommodation = (accommodation: any) => {
     if (!accommodation || (!accommodation.apartment && !accommodation.flat && !accommodation.room && !accommodation.bed)) {
-      return <span className="text-gray-500">Not assigned</span>;
+      return null;
     }
 
     return (
-      <div className="flex items-center space-x-2 text-sm">
+      <div className="flex items-center space-x-1">
         {accommodation.apartment && (
-          <div className="flex items-center space-x-1">
-            <Building size={14} className="text-blue-600" />
-            <span>{accommodation.apartment.name}</span>
-          </div>
+          <Building size={14} className="text-blue-600" />
         )}
         {accommodation.flat && (
-          <div className="flex items-center space-x-1">
-            <Home size={14} className="text-green-600" />
-            <span>{accommodation.flat.name}</span>
-          </div>
+          <Home size={14} className="text-green-600" />
         )}
         {accommodation.room && (
-          <div className="flex items-center space-x-1">
-            <div className="w-3.5 h-3.5 bg-orange-600 rounded-sm" />
-            <span>{accommodation.room.name}</span>
-          </div>
+          <div className="w-3 h-3 bg-orange-600 rounded-sm" />
         )}
         {accommodation.bed && (
-          <div className="flex items-center space-x-1">
-            <Bed size={14} className="text-purple-600" />
-            <span>{accommodation.bed.name}</span>
-          </div>
+          <Bed size={14} className="text-purple-600" />
         )}
       </div>
     );
@@ -138,7 +123,6 @@ export function UserUpcomingBookings() {
         ) : (
           <div className="space-y-4">
             {bookings.map((booking) => {
-              const isExpanded = expandedBookings.has(booking.requestId);
               const userMember = booking.bookingMembers.find(member => member.userId === user?.id);
               
               return (
@@ -177,8 +161,11 @@ export function UserUpcomingBookings() {
                           </div>
                           <div>
                             <span className="font-medium text-gray-700">Accommodation:</span>
-                            <div className="mt-1">
-                              {renderAccommodation(userMember.accommodation)}
+                            <div className="mt-1 flex items-center space-x-2">
+                              <div className="flex items-center space-x-1">
+                                {renderAccommodation(userMember.accommodation)}
+                              </div>
+                              {/* Map link would go here if available in API */}
                             </div>
                           </div>
                         </div>
@@ -186,30 +173,12 @@ export function UserUpcomingBookings() {
 
                       {booking.bookingType === 'team' && (
                         <button
-                          onClick={() => toggleExpanded(booking.requestId)}
+                          onClick={() => showTeamMembers(booking.bookingMembers)}
                           className="text-sm text-blue-600 hover:text-blue-700 flex items-center space-x-1"
                         >
                           <Users size={14} />
-                          <span>{isExpanded ? 'Hide' : 'View'} Team Members</span>
+                          <span>View Team Members</span>
                         </button>
-                      )}
-
-                      {isExpanded && booking.bookingType === 'team' && (
-                        <div className="mt-4 space-y-2">
-                          {booking.bookingMembers.map((member, index) => (
-                            <div key={index} className="bg-gray-50 p-3 rounded-md">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <div className="text-sm font-medium text-gray-900">{member.username}</div>
-                                  <div className="text-xs text-gray-500">{member.role}</div>
-                                </div>
-                                <div className="text-xs text-gray-600">
-                                  {formatDateTime(member.checkIn || '').date} - {formatDateTime(member.checkOut || '').date}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
                       )}
                     </div>
 
@@ -226,6 +195,12 @@ export function UserUpcomingBookings() {
           </div>
         )}
       </div>
+
+      <TeamMembersModal
+        isOpen={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        members={selectedTeamMembers}
+      />
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { apiService } from '../../services/api';
 import { BookingRequest, City } from '../../types';
 import { LoadingSpinner } from '../../components/LoadingSpinner';
 import { StatusBadge } from '../../components/StatusBadge';
-import { Building, Home, Bed, Users, Calendar, Filter, X } from 'lucide-react';
+import { TeamMembersModal } from '../../components/TeamMembersModal';
+import { Building, Home, Bed, Users, Calendar, Filter, X, MapPin } from 'lucide-react';
 
 export function UserBookingHistory() {
   const { user } = useAuth();
@@ -12,7 +13,8 @@ export function UserBookingHistory() {
   const [cities, setCities] = useState<City[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
-  const [expandedRequests, setExpandedRequests] = useState<Set<number>>(new Set());
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<any[]>([]);
+  const [showTeamModal, setShowTeamModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({
     city: '',
@@ -85,14 +87,9 @@ export function UserBookingHistory() {
     return true;
   });
 
-  const toggleExpanded = (requestId: number) => {
-    const newExpanded = new Set(expandedRequests);
-    if (newExpanded.has(requestId)) {
-      newExpanded.delete(requestId);
-    } else {
-      newExpanded.add(requestId);
-    }
-    setExpandedRequests(newExpanded);
+  const showTeamMembers = (members: any[]) => {
+    setSelectedTeamMembers(members);
+    setShowTeamModal(true);
   };
 
   const formatDateTime = (dateStr: string) => {
@@ -113,34 +110,22 @@ export function UserBookingHistory() {
 
   const renderAccommodation = (accommodation: any) => {
     if (!accommodation || (!accommodation.apartment && !accommodation.flat && !accommodation.room && !accommodation.bed)) {
-      return <span className="text-gray-500">Not assigned</span>;
+      return null;
     }
 
     return (
-      <div className="flex items-center space-x-2 text-sm">
+      <div className="flex items-center space-x-1">
         {accommodation.apartment && (
-          <div className="flex items-center space-x-1">
-            <Building size={12} className="text-blue-600" />
-            <span>{accommodation.apartment.name}</span>
-          </div>
+          <Building size={12} className="text-blue-600" />
         )}
         {accommodation.flat && (
-          <div className="flex items-center space-x-1">
-            <Home size={12} className="text-green-600" />
-            <span>{accommodation.flat.name}</span>
-          </div>
+          <Home size={12} className="text-green-600" />
         )}
         {accommodation.room && (
-          <div className="flex items-center space-x-1">
-            <div className="w-3 h-3 bg-orange-600 rounded-sm" />
-            <span>{accommodation.room.name}</span>
-          </div>
+          <div className="w-3 h-3 bg-orange-600 rounded-sm" />
         )}
         {accommodation.bed && (
-          <div className="flex items-center space-x-1">
-            <Bed size={12} className="text-purple-600" />
-            <span>{accommodation.bed.name}</span>
-          </div>
+          <Bed size={12} className="text-purple-600" />
         )}
       </div>
     );
@@ -258,91 +243,63 @@ export function UserBookingHistory() {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredHistory.map((request) => {
                   const userMember = request.bookingMembers.find(member => member.userId === user?.id);
-                  const isExpanded = expandedRequests.has(request.requestId);
                   
                   return (
-                    <React.Fragment key={request.requestId}>
-                      <tr className="hover:bg-gray-50">
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {formatDateTime(request.requestedAt).date}
-                          <div className="text-xs text-gray-500">
-                            {formatDateTime(request.requestedAt).time}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="text-gray-900">{request.requestedUser.name}</div>
-                          <div className="text-xs text-gray-500">{request.requestedUser.role}</div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {request.cityName}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {userMember && (
-                            <div>
-                              <div className="text-gray-900">
-                                {formatDateTime(userMember.checkIn || '').date} - {formatDateTime(userMember.checkOut || '').date}
-                              </div>
-                              <div className="text-xs text-gray-500">
-                                {formatDateTime(userMember.checkIn || '').time} - {formatDateTime(userMember.checkOut || '').time}
-                              </div>
+                    <tr key={request.requestId} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {formatDateTime(request.requestedAt).date}
+                        <div className="text-xs text-gray-500">
+                          {formatDateTime(request.requestedAt).time}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="text-gray-900">{request.requestedUser.name}</div>
+                        <div className="text-xs text-gray-500">{request.requestedUser.role}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {request.cityName}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {userMember && (
+                          <div>
+                            <div className="text-gray-900">
+                              {formatDateTime(userMember.checkIn || '').date} - {formatDateTime(userMember.checkOut || '').date}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {userMember && calculateDuration(userMember.checkIn || '', userMember.checkOut || '')}
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusBadge status={request.status || 'pending'} />
-                        </td>
-                        <td className="px-4 py-3 text-sm">
+                            <div className="text-xs text-gray-500">
+                              {formatDateTime(userMember.checkIn || '').time} - {formatDateTime(userMember.checkOut || '').time}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {userMember && calculateDuration(userMember.checkIn || '', userMember.checkOut || '')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusBadge status={request.status || 'pending'} />
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center space-x-2">
                           {userMember && renderAccommodation(userMember.accommodation)}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          <div className="flex items-center space-x-1">
-                            <span className="text-gray-900 capitalize">{request.bookingType}</span>
-                            {request.bookingType === 'team' && (
-                              <button
-                                onClick={() => toggleExpanded(request.requestId)}
-                                className="text-blue-600 hover:text-blue-700 text-xs"
-                              >
-                                ({request.bookingMembers.length} members)
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-900">
-                          {request.processedAt ? formatDateTime(request.processedAt).date : 'Pending'}
-                        </td>
-                      </tr>
-                      
-                      {isExpanded && request.bookingType === 'team' && (
-                        <tr>
-                          <td colSpan={9} className="px-4 py-3 bg-gray-50">
-                            <div className="space-y-2">
-                              <h4 className="text-sm font-medium text-gray-900 mb-2">Team Members:</h4>
-                              {request.bookingMembers.map((member, index) => (
-                                <div key={index} className="bg-white p-3 rounded border text-sm">
-                                  <div className="flex items-center justify-between">
-                                    <div>
-                                      <div className="font-medium text-gray-900">{member.username}</div>
-                                      <div className="text-xs text-gray-500">{member.role}</div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="text-gray-900">
-                                        {formatDateTime(member.checkIn || '').date} - {formatDateTime(member.checkOut || '').date}
-                                      </div>
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        {renderAccommodation(member.accommodation)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
+                          {/* Map link would go here if available in API */}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <div className="flex items-center space-x-1">
+                          <span className="text-gray-900 capitalize">{request.bookingType}</span>
+                          {request.bookingType === 'team' && (
+                            <button
+                              onClick={() => showTeamMembers(request.bookingMembers)}
+                              className="text-blue-600 hover:text-blue-700 text-xs"
+                            >
+                              ({request.bookingMembers.length} members)
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {request.processedAt ? formatDateTime(request.processedAt).date : 'Pending'}
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -350,6 +307,12 @@ export function UserBookingHistory() {
           </div>
         )}
       </div>
+
+      <TeamMembersModal
+        isOpen={showTeamModal}
+        onClose={() => setShowTeamModal(false)}
+        members={selectedTeamMembers}
+      />
     </div>
   );
 }

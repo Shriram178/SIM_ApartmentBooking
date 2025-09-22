@@ -1,5 +1,6 @@
 import pool from "../db.js";
 import ExcelJS from 'exceljs';
+import { sendMail } from "../utils/mailer.js";
 
 export const getBookingTypes = async (req, res) => {
   try {
@@ -33,11 +34,39 @@ export const createBooking = async (req, res) => {
     const { requesterId, cityId, bookingType, BookingMembers } = req.body;
 
     await client.query("BEGIN");
-    
-    // 1. Check for overlapping accommodations for each booking member
+
+    // 1. Get requester details
+    const requesterRes = await client.query(
+      `SELECT name, email FROM users WHERE id = $1`,
+      [requesterId]
+    );
+    if (requesterRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        message: "Requester not found",
+      });
+    }
+    const requester = requesterRes.rows[0];
+
+    // 2. Get city details
+    const cityRes = await client.query(
+      `SELECT name FROM cities WHERE id = $1`,
+      [cityId]
+    );
+    if (cityRes.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        success: false,
+        message: "City not found",
+      });
+    }
+    const city = cityRes.rows[0];
+
+    // 3. Check overlapping accommodations for each member
     for (const member of BookingMembers) {
       const { memberUserId, checkInTime, checkOutTime } = member;
-      
+
       const overlapCheck = await client.query(
         `SELECT COUNT(*) 
          FROM assigned_accommodations aa
@@ -56,11 +85,10 @@ export const createBooking = async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           success: false,
-          error: `User ${memberUserId} already has an active or upcoming accommodation during the requested time period`
+          error: `User ${memberUserId} already has an active or upcoming accommodation during the requested time period`,
         });
       }
 
-      // Optional: Also check for overlapping pending requests
       const pendingOverlapCheck = await client.query(
         `SELECT COUNT(*) 
          FROM booking_members 
@@ -78,30 +106,55 @@ export const createBooking = async (req, res) => {
         await client.query("ROLLBACK");
         return res.status(400).json({
           success: false,
-          error: `User ${memberUserId} already has a pending request for the same time period`
+          error: `User ${memberUserId} already has a pending request for the same time period`,
         });
       }
     }
 
-    // 2. Insert into requests table
+    // 4. Insert into requests table
     const requestRes = await client.query(
       `INSERT INTO requests (user_id, city_id, booking_type)
        VALUES ($1, $2, $3)
        RETURNING id`,
       [requesterId, cityId, bookingType]
     );
-    
+
     const requestId = requestRes.rows[0].id;
-    
-    // 3. Insert each booking member into booking_members
+
+    // 5. Insert booking members + fetch details for email notifications
     for (const member of BookingMembers) {
       const { memberUserId, checkInTime, checkOutTime } = member;
-      
+
       await client.query(
         `INSERT INTO booking_members (request_id, user_id, check_in, check_out, status)
-        VALUES ($1, $2, $3, $4, 'pending')`,
+         VALUES ($1, $2, $3, $4, 'pending')`,
         [requestId, memberUserId, checkInTime, checkOutTime]
       );
+
+      // Fetch member details
+      const memberRes = await client.query(
+        `SELECT name, email FROM users WHERE id = $1`,
+        [memberUserId]
+      );
+      if (memberRes.rows.length > 0) {
+        const memberData = memberRes.rows[0];
+
+        // Send email notification
+        await sendMail({
+          to: memberData.email,
+          subject: "Accommodation Request Placed",
+          html: `
+            <p>Dear ${memberData.name},</p>
+            <p>An accommodation request has been placed for you by <b>${requester.name}</b>.</p>
+            <p><b>City:</b> ${city.name}<br/>
+               <b>Booking Type:</b> ${bookingType}<br/>
+               <b>Check-In:</b> ${new Date(checkInTime).toLocaleString()}<br/>
+               <b>Check-Out:</b> ${new Date(checkOutTime).toLocaleString()}</p>
+            <p>We will notify you once the request is processed.</p>
+            <p>Regards,<br/>Accommodation Team</p>
+          `,
+        });
+      }
     }
 
     await client.query("COMMIT");
@@ -111,11 +164,12 @@ export const createBooking = async (req, res) => {
       message: "Booking request submitted successfully.",
       requestId,
     });
-
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Booking error:", err);
-    res.status(500).json({ success: false, error: "Failed to create booking request" });
+    res
+      .status(500)
+      .json({ success: false, error: "Failed to create booking request" });
   } finally {
     client.release();
   }
@@ -243,85 +297,111 @@ export const cancelBooking = async (req, res) => {
   const { requestId, userId } = req.params;
 
   try {
-    await pool.query('BEGIN');
+    await pool.query("BEGIN");
 
     // 1. Get request details with FOR UPDATE lock
     const requestQuery = `
-      SELECT id, booking_type 
+      SELECT id, booking_type, city_id, user_id 
       FROM requests 
       WHERE id = $1 AND status = 'approved'
       FOR UPDATE
-      `;
-      const requestResult = await pool.query(requestQuery, [requestId]);
-      
-      if (requestResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
+    `;
+    const requestResult = await pool.query(requestQuery, [requestId]);
+
+    if (requestResult.rows.length === 0) {
+      await pool.query("ROLLBACK");
       return res.status(404).json({
         success: false,
-        message: 'Approved booking not found'
+        message: "Approved booking not found",
       });
     }
 
     const request = requestResult.rows[0];
 
-    // 2. Find the member's booking
+    // 2. Find the member's booking with user details
     const memberQuery = `
-    SELECT id FROM booking_members
-    WHERE request_id = $1 AND user_id = $2 AND status != 'cancelled'
+      SELECT bm.id, u.name, u.email, bm.check_in, bm.check_out
+      FROM booking_members bm
+      JOIN users u ON bm.user_id = u.id
+      WHERE bm.request_id = $1 AND bm.user_id = $2 AND bm.status != 'cancelled'
     `;
     const memberResult = await pool.query(memberQuery, [requestId, userId]);
-    
+
     if (memberResult.rows.length === 0) {
-      await pool.query('ROLLBACK');
+      await pool.query("ROLLBACK");
       return res.status(404).json({
         success: false,
-        message: 'Active user booking not found'
+        message: "Active user booking not found",
       });
     }
 
-    const memberId = memberResult.rows[0].id;
+    const member = memberResult.rows[0];
 
     // 3. Release accommodation
     await pool.query(
-      'DELETE FROM assigned_accommodations WHERE booking_members_id = $1',
-      [memberId]
+      "DELETE FROM assigned_accommodations WHERE booking_members_id = $1",
+      [member.id]
     );
 
-    // 4. Update member status to cancelled (instead of deleting)
+    // 4. Update member status to cancelled
     await pool.query(
       `UPDATE booking_members SET status = 'cancelled' WHERE id = $1`,
-      [memberId]
+      [member.id]
     );
 
     // 5. Check if all members are cancelled, then cancel entire request
     const activeMembersQuery = `
-    SELECT COUNT(*) FROM booking_members 
-    WHERE request_id = $1 AND status != 'cancelled'
+      SELECT COUNT(*) FROM booking_members 
+      WHERE request_id = $1 AND status != 'cancelled'
     `;
     const activeResult = await pool.query(activeMembersQuery, [requestId]);
-    
-    if (activeResult.rows[0].count === '0') {
+
+    let requestCancelled = false;
+    if (activeResult.rows[0].count === "0") {
       await pool.query(
         `UPDATE requests SET status = 'cancelled', processed_at = NOW() 
          WHERE id = $1`,
-         [requestId]
+        [requestId]
       );
+      requestCancelled = true;
     }
 
-    await pool.query('COMMIT');
+    await pool.query("COMMIT");
+
+    // 6. Notify the user whose booking got cancelled
+    const emailHtml = `
+      <p>Dear ${member.name},</p>
+      <p>Your accommodation booking has been <b>cancelled</b> by the user.</p>
+      <p><b>Booking Details:</b></p>
+      <ul>
+        <li>City ID: ${request.city_id}</li>
+        <li>Booking Type: ${request.booking_type}</li>
+        <li>Check-In: ${new Date(member.check_in).toLocaleString()}</li>
+        <li>Check-Out: ${new Date(member.check_out).toLocaleString()}</li>
+      </ul>
+      <p>If you think this was a mistake, please contact the Accommodation Team.</p>
+      <p>Regards,<br/>Accommodation Management Team</p>
+    `;
+
+    await sendMail({
+      to: member.email,
+      subject: "Accommodation Booking Cancelled",
+      html: emailHtml,
+    });
 
     return res.status(200).json({
       success: true,
-      message: 'Booking cancelled successfully'
+      message: requestCancelled
+        ? "Booking cancelled successfully and request closed"
+        : "Booking cancelled successfully",
     });
-
   } catch (error) {
-    await pool.query('ROLLBACK');
-    console.error('Error cancelling booking:', error);
+    await pool.query("ROLLBACK");
+    console.error("Error cancelling booking:", error);
     return res.status(500).json({
       success: false,
-      message: 'Internal server error',
-      error: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
@@ -499,7 +579,7 @@ export const getBookingHistory = async (req, res) => {
     await client.query(
       `UPDATE booking_members 
        SET status = 'accommodated'
-       WHERE status IN ('approved', 'pending')
+       WHERE status IN ('approved')
        AND check_in <= $1 AND check_out > $1`,
       [now]
     );
@@ -508,7 +588,7 @@ export const getBookingHistory = async (req, res) => {
     await client.query(
       `UPDATE booking_members 
        SET status = 'completed'
-       WHERE status IN ('approved', 'pending', 'accommodated')
+       WHERE status IN ('approved', 'accommodated')
        AND check_out <= $1`,
       [now]
     );
